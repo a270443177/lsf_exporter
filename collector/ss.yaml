@@ -1,0 +1,31 @@
+licenses:
+  - name: snpslmd
+    license_server: 27020@master02
+    monitor_users: True
+    monitor_reservations: True
+    monitor_versions: True
+  - name: cdslmd
+    license_server: 5280@master02
+    monitor_users: True
+    monitor_reservations: True
+    monitor_versions: True
+  - name: empyrean
+    license_server: 59001@master02
+    monitor_users: True
+    monitor_reservations: True
+    monitor_versions: True
+  - name: jedat
+    license_server: 27009@master02
+    monitor_users: True
+    monitor_reservations: True
+    monitor_versions: True
+  - name: mgcld
+    license_server: 1717@master02
+    monitor_users: True
+    monitor_reservations: True
+    monitor_versions: True
+  - name: pslmd
+    license_server: 27070@master02
+    monitor_users: True
+    monitor_reservations: True
+    monitor_versions: True

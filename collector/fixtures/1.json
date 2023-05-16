@@ -1,0 +1,23 @@
+[
+    {
+        "targets": [
+            "192.168.7.250"
+        ],
+        "labels": {
+            "collectors": "",
+            "appname": "测试服务器01",
+            "hosttype": "Lenovo",
+            "ostype": "IPMI"
+        }
+    },  {
+        "targets": [
+            "192.168.7.251"
+        ],
+        "labels": {
+            "collectors": "",
+            "appname": "测试服务器01",
+            "hosttype": "Lenovo",
+            "ostype": "IPMI"
+        }
+    }
+]
