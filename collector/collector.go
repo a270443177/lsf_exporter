@@ -32,14 +32,20 @@ const namespace = "lsf"
 var (
 	scrapeDurationDesc = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "scrape", "collector_duration_seconds"),
-		"exporter: Duration of a collector scrape.",
+		"lsf_exporter: Duration of a collector scrape.",
 		[]string{"collector"},
 		nil,
 	)
 	scrapeSuccessDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "scrape", "collector_duration_seconds"),
-		"exporter: Duration of a collector scrape.",
+		prometheus.BuildFQName(namespace, "scrape", "collector_success"),
+		"lsf_exporter: Whether a collector succeeded.",
 		[]string{"collector"},
+		nil,
+	)
+	scrapeErrorDesc = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "scrape", "error"),
+		"lsf_exporter: Whether a license scrape had an error.",
+		[]string{"collector", "name"},
 		nil,
 	)
 )
@@ -136,6 +142,8 @@ func NewLsfCollector(logger log.Logger, filters ...string) (*LsfCollector, error
 // Describe implements the prometheus.Collector interface.
 func (n LsfCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- scrapeDurationDesc
+	ch <- scrapeSuccessDesc
+	ch <- scrapeErrorDesc
 }
 
 // Collect implements the prometheus.Collector interface.
@@ -145,6 +153,7 @@ func (n LsfCollector) Collect(ch chan<- prometheus.Metric) {
 	wg.Add(len(n.Collectors))
 
 	for name, c := range n.Collectors {
+		fmt.Println("sdewt5tgtrewgreg", name)
 		go func(name string, c Collector) {
 			execute(name, c, ch, n.logger)
 			wg.Done()

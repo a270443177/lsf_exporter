@@ -1,4 +1,4 @@
-module github.com/mjtrangoni/flexlm_exporter
+module github.com/a270443177/lsf_exporter
 
 go 1.19
 

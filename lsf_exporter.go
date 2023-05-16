@@ -26,7 +26,7 @@ import (
 	"os/user"
 	"sort"
 
-	"github.com/mjtrangoni/flexlm_exporter/collector"
+	"github.com/a270443177/lsf_exporter/collector"
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/common/promlog/flag"
 
