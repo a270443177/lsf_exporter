@@ -35,7 +35,7 @@ func NewLSFJobCollector(logger log.Logger) (Collector, error) {
 		JobInfo: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "bjobs", "status"),
 			"这边是测试的测试的 测试的测试的",
-			[]string{"Queue", "FromHost", "ExecutionHost", "JobName"}, nil,
+			[]string{"ID", "User", "Status", "Queue", "FromHost", "ExecutionHost", "JobName"}, nil,
 		),
 		logger: logger,
 	}, nil
@@ -57,7 +57,7 @@ func (c *JobCollector) Update(ch chan<- prometheus.Metric) error {
 	return nil
 }
 
-func parseJobStatus() Job {
+func parseJJobStatus() Job {
 	now := time.Now().Unix()
 	return Job{
 		ID:            "1",
@@ -73,8 +73,8 @@ func parseJobStatus() Job {
 }
 
 func (c *JobCollector) getJobStatus(ch chan<- prometheus.Metric) error {
-	parseJobStatus := parseJobStatus()
-	ch <- prometheus.MustNewConstMetric(c.JobInfo, prometheus.GaugeValue, float64(parseJobStatus.SubmitTime), parseJobStatus.ID, parseJobStatus.User, parseJobStatus.Queue, parseJobStatus.FromHost, parseJobStatus.ExecutionHost, parseJobStatus.JobName)
+	parseJobStatus := parseJJobStatus()
+	ch <- prometheus.MustNewConstMetric(c.JobInfo, prometheus.GaugeValue, float64(parseJobStatus.SubmitTime), parseJobStatus.ID, parseJobStatus.User, parseJobStatus.Status, parseJobStatus.Queue, parseJobStatus.FromHost, parseJobStatus.ExecutionHost, parseJobStatus.JobName)
 	return nil
 
 }

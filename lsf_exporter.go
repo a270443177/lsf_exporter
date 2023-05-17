@@ -54,19 +54,19 @@ type handler struct {
 	// the exporter itself.
 	exporterMetricsRegistry *prometheus.Registry
 	includeExporterMetrics  bool
-	configPath              string
-	maxRequests             int
-	logger                  log.Logger
+	//configPath              string
+	maxRequests int
+	logger      log.Logger
 }
 
-func newHandler(includeExporterMetrics bool, configPath string, maxRequests int, logger log.Logger) *handler {
+func newHandler(includeExporterMetrics bool, maxRequests int, logger log.Logger) *handler {
 	level.Debug(logger).Log("msg", includeExporterMetrics)
 	h := &handler{
 		exporterMetricsRegistry: prometheus.NewRegistry(),
 		includeExporterMetrics:  includeExporterMetrics,
-		configPath:              configPath,
-		maxRequests:             maxRequests,
-		logger:                  logger,
+		//configPath:              configPath,
+		maxRequests: maxRequests,
+		logger:      logger,
 	}
 	if h.includeExporterMetrics {
 		h.exporterMetricsRegistry.MustRegister(
@@ -147,8 +147,10 @@ func (h *handler) innerHandler(filters ...string) (http.Handler, error) {
 
 	r := prometheus.NewRegistry()
 	r.MustRegister(version.NewCollector("lsf_exporter"))
+
 	if err := r.Register(nc); err != nil {
-		return nil, fmt.Errorf("couldn't register node collector: %s", err)
+
+		return nil, fmt.Errorf("couldn't register lsf collector: %s", err)
 	}
 
 	handler := promhttp.HandlerFor(
@@ -178,7 +180,7 @@ func main() {
 			"web.telemetry-path",
 			"Path under which to expose metrics.",
 		).Default("/metrics").String()
-		configPath  = kingpin.Flag("path.config", "Configuration YAML file path.").Default("config.yml").String()
+		//configPath  = kingpin.Flag("path.config", "Configuration YAML file path.").Default("config.yml").String()
 		maxRequests = kingpin.Flag(
 			"web.max-requests",
 			"Maximum number of parallel scrape requests. Use 0 to disable.",
@@ -192,7 +194,7 @@ func main() {
 
 	promlogConfig := &promlog.Config{}
 	flag.AddFlags(kingpin.CommandLine, promlogConfig)
-	kingpin.Version(version.Print("fsf_exporter"))
+	kingpin.Version(version.Print("lsf_exporter"))
 	kingpin.CommandLine.UsageWriter(os.Stdout)
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
@@ -206,7 +208,7 @@ func main() {
 			`This exporter is designed to run as unprivileged user, root is not required.`)
 	}
 
-	http.Handle(*metricsPath, newHandler(!*disableExporterMetrics, *configPath, *maxRequests, logger))
+	http.Handle(*metricsPath, newHandler(!*disableExporterMetrics, *maxRequests, logger))
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`<html>
 			<head><title>Lsf Exporter</title></head>

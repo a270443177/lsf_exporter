@@ -70,14 +70,13 @@ func registerCollector(collector string, isDefaultEnabled bool, factory func(log
 	} else {
 		helpDefaultState = "disabled"
 	}
-
 	flagName := fmt.Sprintf("collector.%s", collector)
 	flagHelp := fmt.Sprintf("Enable the %s collector (default: %s).", collector, helpDefaultState)
 	defaultValue := fmt.Sprintf("%v", isDefaultEnabled)
 
 	flag := kingpin.Flag(flagName, flagHelp).Default(defaultValue).Action(collectorFlagAction(collector)).Bool()
-	collectorState[collector] = flag
 
+	collectorState[collector] = flag
 	factories[collector] = factory
 }
 
@@ -87,6 +86,16 @@ type LsfCollector struct {
 	logger     log.Logger
 }
 
+// DisableDefaultCollectors sets the collector state to false for all collectors which
+// have not been explicitly enabled on the command line.
+func DisableDefaultCollectors() {
+	for c := range collectorState {
+		if _, ok := forcedCollectors[c]; !ok {
+			*collectorState[c] = false
+		}
+	}
+}
+
 // collectorFlagAction generates a new action function for the given collector
 // to track whether it has been explicitly enabled or disabled from the command line.
 // A new action function is needed for each collector flag because the ParseContext
@@ -94,7 +103,7 @@ type LsfCollector struct {
 // See: https://github.com/alecthomas/kingpin/issues/294
 func collectorFlagAction(collector string) func(ctx *kingpin.ParseContext) error {
 	return func(ctx *kingpin.ParseContext) error {
-		forcedCollectors[collector] = true
+		forcedCollectors[collector] = false
 		return nil
 	}
 }
@@ -153,7 +162,6 @@ func (n LsfCollector) Collect(ch chan<- prometheus.Metric) {
 	wg.Add(len(n.Collectors))
 
 	for name, c := range n.Collectors {
-		fmt.Println("sdewt5tgtrewgreg", name)
 		go func(name string, c Collector) {
 			execute(name, c, ch, n.logger)
 			wg.Done()
@@ -169,7 +177,6 @@ func execute(name string, c Collector, ch chan<- prometheus.Metric, logger log.L
 	begin := time.Now()
 	err := c.Update(ch)
 	duration := time.Since(begin)
-
 	if err != nil {
 		level.Error(logger).Log(name, "collector failed after:", duration.Seconds(), ":", err)
 
