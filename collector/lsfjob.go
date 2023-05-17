@@ -34,7 +34,7 @@ func NewLSFJobCollector(logger log.Logger) (Collector, error) {
 	return &JobCollector{
 		JobInfo: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "bjobs", "status"),
-			"这边是测试的测试的 测试的测试的",
+			"bjobs status labeled by id, user, status, queue and FromHost of the starttime.",
 			[]string{"ID", "User", "Status", "Queue", "FromHost", "ExecutionHost", "JobName"}, nil,
 		),
 		logger: logger,
