@@ -25,7 +25,7 @@ type JobCollector struct {
 }
 
 func init() {
-	registerCollector("lsfjob", defaultEnabled, NewLSFJobCollector)
+	registerCollector("lsfjob", false, NewLSFJobCollector)
 }
 
 // NewLmstatCollector returns a new Collector exposing lmstat license stats.

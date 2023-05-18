@@ -57,3 +57,35 @@ type aggrFeaturesExp struct {
 	features int
 	licenses int
 }
+
+type queuesInfo struct {
+	name   string
+	prio   float64
+	status string
+	maxjob float64
+	jl_u   string
+	jl_p   string
+	jl_h   string
+	njobs  float64
+	pend   float64
+	run    float64
+	susp   string
+	rsv    string
+}
+type bhostInfo struct {
+	name   string
+	status string
+	maxjob float64
+	jl_u   string
+	njobs  float64
+	run    float64
+	susp   float64
+	uusp   float64
+	rsv    float64
+}
+
+type lsfclusterinfo struct {
+	clustername string
+	mastername  string
+	version     string
+}

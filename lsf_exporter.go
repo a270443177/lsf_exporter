@@ -199,7 +199,7 @@ func main() {
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
 
-	promlogConfig.Level.Set("debug")
+	promlogConfig.Level.Set("info")
 	logger := promlog.New(promlogConfig)
 	level.Info(logger).Log("msg", "Starting Lsf", "version", version.Info())
 	level.Info(logger).Log("msg", "Build context", "build_context", version.BuildContext())
