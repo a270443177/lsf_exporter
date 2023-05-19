@@ -75,7 +75,7 @@ func registerCollector(collector string, isDefaultEnabled bool, factory func(log
 	defaultValue := fmt.Sprintf("%v", isDefaultEnabled)
 
 	flag := kingpin.Flag(flagName, flagHelp).Default(defaultValue).Action(collectorFlagAction(collector)).Bool()
-	kingpin.Parse()
+
 	collectorState[collector] = flag
 	factories[collector] = factory
 }
