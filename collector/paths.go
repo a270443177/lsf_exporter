@@ -14,9 +14,8 @@
 
 package collector
 
-import (
-	kingpin "github.com/alecthomas/kingpin/v2"
-)
+// import (
+// 	kingpin "github.com/alecthomas/kingpin/v2"
+// )
 
 // The path of the Flexlm binaries.
-var lmutilPath = kingpin.Flag("path.lmutil", "FLEXlm `lmutil` path.").Default("E:\\DEV\\flexlm_exporter\\flexnet\\lmutil.exe").String()
