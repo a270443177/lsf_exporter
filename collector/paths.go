@@ -14,8 +14,14 @@
 
 package collector
 
-// import (
-// 	kingpin "github.com/alecthomas/kingpin/v2"
-// )
+import (
+	kingpin "github.com/alecthomas/kingpin/v2"
+)
 
 // The path of the Flexlm binaries.
+var (
+	LSF_BINDIR    = kingpin.Flag("lsf_path.lsf_bindir", "LSF BIN DIR PATH.").Envar("LSF_BINDIR").Required().String()
+	LSF_SERVERDIR = kingpin.Flag("lsf_path.serverdir", "LSF SERVER DIR PATH.").Envar("LSF_SERVERDIR").Required().String()
+	LSF_ENVDIR    = kingpin.Flag("lsf_path.envdir", "LSF ENV DIR PATH.").Envar("LSF_ENVDIR").Required().String()
+	LSF_LIBDIR    = kingpin.Flag("lsf_path.libdir", "LSF LIB DIR PATH.").Envar("LSF_LIBDIR").Required().String()
+)
