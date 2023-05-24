@@ -14,50 +14,6 @@
 
 package collector
 
-type lmstatInformation struct {
-	arch    string
-	build   string
-	version string
-}
-
-type server struct {
-	fqdn    string
-	port    string
-	version string
-	status  bool
-	master  bool
-}
-
-type vendor struct {
-	status  bool
-	version string
-}
-
-type feature struct {
-	issued float64
-	used   float64
-}
-
-type featureUserUsed struct {
-	num     float64
-	version string
-	since   string
-}
-
-type featureExp struct {
-	name     string
-	expires  float64
-	licenses string
-	vendor   string
-	version  string
-}
-
-type aggrFeaturesExp struct {
-	app      string
-	features int
-	licenses int
-}
-
 type queuesInfo struct {
 	name   string
 	prio   float64
@@ -72,20 +28,61 @@ type queuesInfo struct {
 	susp   string
 	rsv    string
 }
+
+// 以下是bhosts命令的struct
 type bhostInfo struct {
-	name   string
-	status string
-	maxjob float64
-	jl_u   string
-	njobs  float64
-	run    float64
-	susp   float64
-	uusp   float64
-	rsv    float64
+	HOST_NAME string  `csv:"HOST_NAME"`
+	STATUS    string  `csv:"STATUS"`
+	JL_U      string  `csv:"JL/U"`
+	MAX       float64 `csv:"MAX"`
+	NJOBS     float64 `csv:"NJOBS"`
+	RUN       float64 `csv:"RUN"`
+	SSUSP     float64 `csv:"SSUSP"`
+	USUSP     float64 `csv:"USUSP"`
+	RSV       float64 `csv:"RSV"`
 }
 
-type lsfclusterinfo struct {
-	clustername string
-	mastername  string
-	version     string
+// 以下是bqueues命令的struct
+type bqueuesInfo struct {
+	QUEUE_NAME string  `csv:"QUEUE_NAME"`
+	PRIO       float64 `csv:"PRIO"`
+	STATUS     string  `csv:"STATUS"`
+	MAX        string  `csv:"MAX"`
+	JL_U       string  `csv:"JL/U"`
+	JL_P       string  `csv:"JL/P"`
+	JL_H       string  `csv:"JL/H"`
+	NJOBS      float64 `csv:"NJOBS"`
+	PEND       float64 `csv:"PEND"`
+	RUN        float64 `csv:"RUN"`
+	SUSP       string  `csv:"SUSP"`
+	RSV        string  `csv:"RSV"`
+}
+
+// 以下是lsload命令的struct
+type lsloadInfo struct {
+	Name   string  `csv:"HOST_NAME"`
+	STATUS string  `csv:"status"`
+	R15S   float64 `csv:"r15s"`
+	R1M    float64 `csv:"r1m"`
+	R15M   float64 `csv:"r15m"`
+	UT     string  `csv:"ut"`
+	PG     float64 `csv:"pg"`
+	LS     float64 `csv:"ls"`
+	IT     float64 `csv:"it"`
+	TMP    string  `csv:"tmp"`
+	SWP    string  `csv:"swp"`
+	MEM    string  `csv:"mem"`
+}
+
+// 以下是lshosts命令的struct
+type lshostsInfo struct {
+	HOST_NAME string `csv:"HOST_NAME"`
+	HOST_TYPE string `csv:"type"`
+	Model     string `csv:"model"`
+	Cpuf      string `csv:"cpuf"`
+	Ncpus     string `csv:"ncpus"`
+	Maxmem    string `csv:"maxmem"`
+	Maxswp    string `csv:"maxswp"`
+	Server    string `csv:"server"`
+	RESOURCES string `csv:"RESOURCES"`
 }

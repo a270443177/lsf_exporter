@@ -4,30 +4,26 @@ import (
 	"bytes"
 	"encoding/csv"
 	"fmt"
-	"os"
+	"io"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
+	"github.com/jszwec/csvutil"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
 type bHostsCollector struct {
-	LsfInfo          *prometheus.Desc
-	JobNJobsCount    *prometheus.Desc
-	JobRuningCount   *prometheus.Desc
-	JobMaxJobCount   *prometheus.Desc
-	JobSSUSPJobCount *prometheus.Desc
-	JobUSUSPJobCount *prometheus.Desc
-	bhostStatus      *prometheus.Desc
-	logger           log.Logger
-}
+	HostRuningJobCount *prometheus.Desc
+	HostNJobsCount     *prometheus.Desc
 
-const (
-	notFound = "not found"
-)
+	HostMaxJobCount   *prometheus.Desc
+	HostSSUSPJobCount *prometheus.Desc
+	HostUSUSPJobCount *prometheus.Desc
+	HostStatus        *prometheus.Desc
+	logger            log.Logger
+}
 
 func init() {
 	registerCollector("bhosts", defaultEnabled, NewLSFbHostCollector)
@@ -37,40 +33,35 @@ func init() {
 func NewLSFbHostCollector(logger log.Logger) (Collector, error) {
 
 	return &bHostsCollector{
-		JobRuningCount: prometheus.NewDesc(
-			prometheus.BuildFQName(namespace, "bhost", "runing_count"),
+		HostRuningJobCount: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "bhost", "runingjob_count"),
 			"The number of tasks for all running jobs on the host.",
 			[]string{"host_name"}, nil,
 		),
-		JobNJobsCount: prometheus.NewDesc(
+		HostNJobsCount: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "bhost", "njobs_count"),
 			"The number of tasks for all jobs that are dispatched to the host. The NJOBS value includes running, suspended, and chunk jobs.",
 			[]string{"host_name"}, nil,
 		),
-		JobMaxJobCount: prometheus.NewDesc(
-			prometheus.BuildFQName(namespace, "bhost", "maxjobs_count"),
+		HostMaxJobCount: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "bhost", "maxjob_count"),
 			"The maximum number of job slots available. A dash (-1) indicates no limit.",
 			[]string{"host_name"}, nil,
 		),
-		JobSSUSPJobCount: prometheus.NewDesc(
-			prometheus.BuildFQName(namespace, "bhost", "ssusp_count"),
+		HostSSUSPJobCount: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "bhost", "ssuspjob_count"),
 			"The number of tasks for all system suspended jobs on the host.",
 			[]string{"host_name"}, nil,
 		),
-		JobUSUSPJobCount: prometheus.NewDesc(
-			prometheus.BuildFQName(namespace, "bhost", "ususp_count"),
+		HostUSUSPJobCount: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "bhost", "ususpjob_count"),
 			"The number of tasks for all user suspended jobs on the host. Jobs can be suspended by the user or by the LSF administrator.",
 			[]string{"host_name"}, nil,
 		),
-		bhostStatus: prometheus.NewDesc(
+		HostStatus: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "bhost", "host_status"),
 			"The status of the host and the sbatchd daemon. Batch jobs can be dispatched only to hosts with an ok status. Host status has the following, 0:Unknow, 1:ok, 2:unavail, 3:unreach, 4:closed/closed_full, 5:closed_cu_excl",
 			[]string{"host_name"}, nil,
-		),
-		LsfInfo: prometheus.NewDesc(
-			prometheus.BuildFQName(namespace, "cluster", "info"),
-			"A metric with a constant '1' value labeled by ClusterName, MasterName and Version of the IBM Spectrum LSF .",
-			[]string{"clustername", "mastername", "version"}, nil,
 		),
 		logger: logger,
 	}, nil
@@ -90,59 +81,54 @@ func (c *bHostsCollector) Update(ch chan<- prometheus.Metric) error {
 		return fmt.Errorf("couldn't get bhosts infomation: %w", err)
 	}
 
-	err = c.parsebLsfClusterInfo(ch)
-	if err != nil {
-		return fmt.Errorf("couldn't get bhosts infomation: %w", err)
-	}
-
 	return nil
 }
 
-func bhostSplite(lsfOutput []byte, logger log.Logger) (map[int]*bhostInfo, error) {
-	r := csv.NewReader(bytes.NewReader(lsfOutput))
-	r.LazyQuotes = true
+type TrimReader struct{ io.Reader }
 
-	result, err := r.ReadAll()
+var trailingws = regexp.MustCompile(` +\r?\n`)
+
+func (tr TrimReader) Read(bs []byte) (int, error) {
+	// Perform the requested read on the given reader.
+	n, err := tr.Reader.Read(bs)
 	if err != nil {
-		return nil, fmt.Errorf("could not parse lsf_tools output: %w", err)
+		return n, err
 	}
 
-	var index = 0
-	var bhostInfos = make(map[int]*bhostInfo)
+	// Remove trailing whitespace from each line.
+	lines := string(bs[:n])
+	trimmed := []byte(trailingws.ReplaceAllString(lines, "\n"))
+	copy(bs, trimmed)
+	return len(trimmed), nil
+}
 
-	//去除header列，并且遍历后存放到struct中
-	for _, v := range result[1:] {
-		var max float64
-		level.Debug(logger).Log("当前获取到的字符串是", v[0])
-		r := regexp.MustCompile(`[^\s]+`)
-		arr := r.FindAllString(v[0], -1)
+func bhost_CsvtoStruct(lsfOutput []byte, logger log.Logger) ([]bhostInfo, error) {
+	csv_out := csv.NewReader(TrimReader{bytes.NewReader(lsfOutput)})
+	csv_out.LazyQuotes = true
+	csv_out.Comma = ' '
+	csv_out.TrimLeadingSpace = true
 
-		njobs, _ := strconv.ParseFloat(arr[4], 64)
-		run, _ := strconv.ParseFloat(arr[5], 64)
-		ssusp, _ := strconv.ParseFloat(arr[6], 64)
-		ususp, _ := strconv.ParseFloat(arr[7], 64)
-		rsv, _ := strconv.ParseFloat(arr[8], 64)
-		if arr[3] == "-" {
-			max, _ = strconv.ParseFloat("-1", 64)
-		} else {
-			max, _ = strconv.ParseFloat(arr[3], 64)
-
-		}
-		bhostInfos[index] = &bhostInfo{
-			name:   arr[0],
-			status: arr[1],
-			jl_u:   arr[2],
-			maxjob: max,
-			njobs:  njobs,
-			run:    run,
-			susp:   ssusp,
-			uusp:   ususp,
-			rsv:    rsv,
-		}
-		index++
+	dec, err := csvutil.NewDecoder(csv_out)
+	if err != nil {
+		level.Error(logger).Log("err=", err)
+		return nil, nil
 	}
 
+	var bhostInfos []bhostInfo
+
+	for {
+		var u bhostInfo
+		if err := dec.Decode(&u); err == io.EOF {
+			break
+		} else if err != nil {
+			level.Error(logger).Log("err=", err)
+			return nil, nil
+		}
+
+		bhostInfos = append(bhostInfos, u)
+	}
 	return bhostInfos, nil
+
 }
 
 func FormatbhostsStatus(status string, logger log.Logger) float64 {
@@ -157,10 +143,6 @@ func FormatbhostsStatus(status string, logger log.Logger) float64 {
 		return float64(3)
 	case state == "closed":
 		return float64(4)
-	case state == "closed_full":
-		return float64(4)
-	case state == "closed_cu_excl":
-		return float64(5)
 	default:
 		return float64(0)
 	}
@@ -169,61 +151,23 @@ func FormatbhostsStatus(status string, logger log.Logger) float64 {
 func (c *bHostsCollector) parsebHostJobCount(ch chan<- prometheus.Metric) error {
 	output, err := lsfOutput(c.logger, "bhosts", "-w")
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		level.Error(c.logger).Log("err: ", err)
+		return nil
 	}
-	bhost, err := bhostSplite(output, c.logger)
+	bhosts, err := bhost_CsvtoStruct(output, c.logger)
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		level.Error(c.logger).Log("err: ", err)
+		return nil
 	}
 
-	for _, q := range bhost {
-		ch <- prometheus.MustNewConstMetric(c.JobNJobsCount, prometheus.GaugeValue, q.njobs, q.name)
-		ch <- prometheus.MustNewConstMetric(c.JobRuningCount, prometheus.GaugeValue, q.run, q.name)
-		ch <- prometheus.MustNewConstMetric(c.JobMaxJobCount, prometheus.GaugeValue, q.maxjob, q.name)
-		ch <- prometheus.MustNewConstMetric(c.JobSSUSPJobCount, prometheus.GaugeValue, q.susp, q.name)
-		ch <- prometheus.MustNewConstMetric(c.JobUSUSPJobCount, prometheus.GaugeValue, q.uusp, q.name)
-		ch <- prometheus.MustNewConstMetric(c.bhostStatus, prometheus.GaugeValue, FormatbhostsStatus(q.status, c.logger), q.name)
+	for _, bhost := range bhosts {
+		ch <- prometheus.MustNewConstMetric(c.HostNJobsCount, prometheus.GaugeValue, bhost.NJOBS, bhost.HOST_NAME)
+		ch <- prometheus.MustNewConstMetric(c.HostRuningJobCount, prometheus.GaugeValue, bhost.RUN, bhost.HOST_NAME)
+		ch <- prometheus.MustNewConstMetric(c.HostMaxJobCount, prometheus.GaugeValue, bhost.MAX, bhost.HOST_NAME)
+		ch <- prometheus.MustNewConstMetric(c.HostSSUSPJobCount, prometheus.GaugeValue, bhost.SSUSP, bhost.HOST_NAME)
+		ch <- prometheus.MustNewConstMetric(c.HostUSUSPJobCount, prometheus.GaugeValue, bhost.USUSP, bhost.HOST_NAME)
+		ch <- prometheus.MustNewConstMetric(c.HostStatus, prometheus.GaugeValue, FormatbhostsStatus(bhost.STATUS, c.logger), bhost.HOST_NAME)
 	}
-
-	return nil
-}
-
-func (c *bHostsCollector) parsebLsfClusterInfo(ch chan<- prometheus.Metric) error {
-	output, err := lsfOutput(c.logger, "lsid", "")
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-	lsf_summary := string(output)
-	md := map[string]string{}
-	if ClusterNameRegex.MatchString(lsf_summary) {
-		names := ClusterNameRegex.SubexpNames()
-		matches := ClusterNameRegex.FindAllStringSubmatch(lsf_summary, -1)[0]
-		for i, n := range matches {
-			md[names[i]] = n
-		}
-	}
-
-	if MasterNameRegex.MatchString(lsf_summary) {
-		names := MasterNameRegex.SubexpNames()
-		matches := MasterNameRegex.FindAllStringSubmatch(lsf_summary, -1)[0]
-		for i, n := range matches {
-			md[names[i]] = n
-		}
-	}
-
-	if LSFVersionRegex.MatchString(lsf_summary) {
-		names := LSFVersionRegex.SubexpNames()
-		matches := LSFVersionRegex.FindAllStringSubmatch(lsf_summary, -1)[0]
-		for i, n := range matches {
-			md[names[i]] = n
-		}
-	}
-
-	level.Debug(c.logger).Log("当前集群名称：", md["cluster_name"], ",当前的master节点名是:", md["master_name"], ",版本是:", md["lsf_version"])
-	ch <- prometheus.MustNewConstMetric(c.LsfInfo, prometheus.GaugeValue, 1.0, md["cluster_name"], md["master_name"], md["lsf_version"])
 
 	return nil
 }

@@ -4,23 +4,24 @@ import (
 	"bytes"
 	"encoding/csv"
 	"fmt"
+	"io"
 	"os"
-	"os/exec"
-	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
+	"github.com/jszwec/csvutil"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
 type QueuesCollector struct {
-	QueuesPendingCount *prometheus.Desc
-	QueuesRuningCount  *prometheus.Desc
-	QueuesMaxJobCount  *prometheus.Desc
-	QueuesStatus       *prometheus.Desc
-	logger             log.Logger
+	QueuesRuningJobCount  *prometheus.Desc
+	QueuesPendingJobCount *prometheus.Desc
+	QueuesMaxJobCount     *prometheus.Desc
+	queuesPriority        *prometheus.Desc
+	QueuesStatus          *prometheus.Desc
+	logger                log.Logger
 }
 
 func init() {
@@ -31,24 +32,29 @@ func init() {
 func NewLSFQueuesCollector(logger log.Logger) (Collector, error) {
 
 	return &QueuesCollector{
-		QueuesRuningCount: prometheus.NewDesc(
-			prometheus.BuildFQName(namespace, "job", "runing_count"),
-			"how many runing of jobs in this queues",
+		QueuesRuningJobCount: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "bqueues", "runingjob_count"),
+			"The total number of tasks for all running jobs in the queue. If the -alloc option is used, the total is allocated slots for the jobs in the queue.",
 			[]string{"queues_name"}, nil,
 		),
-		QueuesPendingCount: prometheus.NewDesc(
-			prometheus.BuildFQName(namespace, "job", "pending_count"),
-			"how many pending of jobs in this queues",
+		QueuesPendingJobCount: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "bqueues", "pendingjob_count"),
+			"The total number of tasks for all pending jobs in the queue. If used with the -alloc option, total is zero.",
 			[]string{"queues_name"}, nil,
 		),
 		QueuesStatus: prometheus.NewDesc(
-			prometheus.BuildFQName(namespace, "queues", "status"),
-			"this queues status",
+			prometheus.BuildFQName(namespace, "bqueues", "status"),
+			"The status of the queue. The following values are supported:	1-Open:Active、 2-Open:Inact_Win、 3-Closed:Active 4、Closed:Inact_Win	0-UnKnow	",
+			[]string{"queues_name"}, nil,
+		),
+		queuesPriority: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "bqueues", "priority"),
+			"The priority of the queue. The larger the value, the higher the priority. If job priority is not configured, determines the queue search order at job dispatch, suspend, and resume time. Contrary to usual order of UNIX process priority, jobs from higher priority queues are dispatched first and jobs from lower priority queues are suspended first when hosts are overloaded.",
 			[]string{"queues_name"}, nil,
 		),
 		QueuesMaxJobCount: prometheus.NewDesc(
-			prometheus.BuildFQName(namespace, "queues", "max_jobcount"),
-			"this queues max job",
+			prometheus.BuildFQName(namespace, "bqueues", "maxjob_count"),
+			"The maximum number of job slots that can be used by the jobs from the queue. These job slots are used by dispatched jobs that are not yet finished, and by pending jobs that reserve slots.			",
 			[]string{"queues_name"}, nil,
 		),
 		logger: logger,
@@ -71,95 +77,33 @@ func (c *QueuesCollector) Update(ch chan<- prometheus.Metric) error {
 	return nil
 }
 
-func lsfOutput(logger log.Logger, exe_file string, args ...string) ([]byte, error) {
-	_, err := os.Stat(*LSF_BINDIR)
-	if os.IsNotExist(err) {
-		level.Error(logger).Log("err", *LSF_BINDIR, "missing")
-		os.Exit(1)
-	}
+func bqueues_CsvtoStruct(lsfOutput []byte, logger log.Logger) ([]bqueuesInfo, error) {
+	csv_out := csv.NewReader(TrimReader{bytes.NewReader(lsfOutput)})
+	csv_out.LazyQuotes = true
+	csv_out.Comma = ' '
+	csv_out.TrimLeadingSpace = true
 
-	_, err = os.Stat(*LSF_SERVERDIR)
-	if os.IsNotExist(err) {
-		level.Error(logger).Log("err", *LSF_SERVERDIR, "missing")
-		os.Exit(1)
-	}
-
-	_, err = os.Stat(*LSF_ENVDIR)
-	if os.IsNotExist(err) {
-		level.Error(logger).Log("err", *LSF_ENVDIR, "missing")
-		os.Exit(1)
-	}
-
-	//设置环境变量
-	PATH := os.Getenv("PATH")
-
-	NEW_PATH := PATH + ":" + *LSF_BINDIR
-
-	os.Setenv("PATH", NEW_PATH)
-	os.Setenv("LSF_BINDIR", *LSF_BINDIR)
-	os.Setenv("LSF_ENVDIR", *LSF_ENVDIR)
-	os.Setenv("LSF_LIBDIR", *LSF_LIBDIR)
-	os.Setenv("LSF_SERVERDIR", *LSF_SERVERDIR)
-
-	cmd := exec.Command(exe_file, args...)
-
-	out, err := cmd.Output()
-
+	dec, err := csvutil.NewDecoder(csv_out)
 	if err != nil {
-		return nil, fmt.Errorf("error while calling '%s %s': %v:'unknown error'",
-			exe_file, strings.Join(args, " "), err)
+		level.Error(logger).Log("err=", err)
+		return nil, nil
 	}
 
-	return out, nil
-}
+	var bqueuesInfos []bqueuesInfo
 
-func QueuesSplite(lsfOutput []byte, logger log.Logger) (map[int]*queuesInfo, error) {
-	r := csv.NewReader(bytes.NewReader(lsfOutput))
-	r.LazyQuotes = true
-
-	result, err := r.ReadAll()
-	if err != nil {
-		return nil, fmt.Errorf("could not parse lsf_tools output: %w", err)
-	}
-
-	var index = 0
-	var queuesInfos = make(map[int]*queuesInfo)
-
-	//去除header列，并且遍历后存放到struct中
-	for _, v := range result[1:] {
-		var max float64
-		level.Debug(logger).Log("当前获取到的字符串是", v[0])
-		r := regexp.MustCompile(`[^\s]+`)
-		arr := r.FindAllString(v[0], -1)
-
-		prio, _ := strconv.Atoi(arr[1])
-		njobs, _ := strconv.Atoi(arr[7])
-		pend, _ := strconv.Atoi(arr[8])
-		run, _ := strconv.Atoi(arr[9])
-		if arr[3] == "-" {
-			max, _ = strconv.ParseFloat("-1", 64)
-		} else {
-			max, _ = strconv.ParseFloat(arr[3], 64)
-
+	for {
+		var u bqueuesInfo
+		if err := dec.Decode(&u); err == io.EOF {
+			break
+		} else if err != nil {
+			level.Error(logger).Log("err=", err)
+			return nil, nil
 		}
-		queuesInfos[index] = &queuesInfo{
-			name:   arr[0],
-			prio:   float64(prio),
-			status: arr[2],
-			maxjob: float64(max),
-			jl_u:   arr[4],
-			jl_p:   arr[5],
-			jl_h:   arr[6],
-			njobs:  float64(njobs),
-			pend:   float64(pend),
-			run:    float64(run),
-			susp:   arr[10],
-			rsv:    arr[11],
-		}
-		index++
-	}
 
-	return queuesInfos, nil
+		bqueuesInfos = append(bqueuesInfos, u)
+	}
+	return bqueuesInfos, nil
+
 }
 
 func FormatQueusStatus(status string, logger log.Logger) float64 {
@@ -185,17 +129,22 @@ func (c *QueuesCollector) parseQueuesJobCount(ch chan<- prometheus.Metric) error
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	queues, err := QueuesSplite(output, c.logger)
+	queues, err := bqueues_CsvtoStruct(output, c.logger)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 
 	for _, q := range queues {
-		ch <- prometheus.MustNewConstMetric(c.QueuesRuningCount, prometheus.GaugeValue, q.run, q.name)
-		ch <- prometheus.MustNewConstMetric(c.QueuesPendingCount, prometheus.GaugeValue, q.pend, q.name)
-		ch <- prometheus.MustNewConstMetric(c.QueuesMaxJobCount, prometheus.GaugeValue, q.maxjob, q.name)
-		ch <- prometheus.MustNewConstMetric(c.QueuesStatus, prometheus.GaugeValue, FormatQueusStatus(q.status, c.logger), q.name)
+		MAXCount, err := strconv.ParseFloat(q.MAX, 64)
+		if err != nil {
+			MAXCount = -1
+		}
+		ch <- prometheus.MustNewConstMetric(c.QueuesRuningJobCount, prometheus.GaugeValue, q.RUN, q.QUEUE_NAME)
+		ch <- prometheus.MustNewConstMetric(c.QueuesPendingJobCount, prometheus.GaugeValue, q.PEND, q.QUEUE_NAME)
+		ch <- prometheus.MustNewConstMetric(c.QueuesMaxJobCount, prometheus.GaugeValue, MAXCount, q.QUEUE_NAME)
+		ch <- prometheus.MustNewConstMetric(c.queuesPriority, prometheus.GaugeValue, q.PRIO, q.QUEUE_NAME)
+		ch <- prometheus.MustNewConstMetric(c.QueuesStatus, prometheus.GaugeValue, FormatQueusStatus(q.STATUS, c.logger), q.QUEUE_NAME)
 	}
 
 	return nil
