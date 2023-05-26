@@ -5,7 +5,6 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
-	"os"
 	"strconv"
 	"strings"
 
@@ -126,13 +125,13 @@ func FormatQueusStatus(status string, logger log.Logger) float64 {
 func (c *QueuesCollector) parseQueuesJobCount(ch chan<- prometheus.Metric) error {
 	output, err := lsfOutput(c.logger, "bqueues", "-w")
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		level.Error(c.logger).Log("err=", err)
+		return nil
 	}
 	queues, err := bqueues_CsvtoStruct(output, c.logger)
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		level.Error(c.logger).Log("err=", err)
+		return nil
 	}
 
 	for _, q := range queues {

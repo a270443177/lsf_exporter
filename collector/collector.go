@@ -64,6 +64,7 @@ var (
 )
 
 func registerCollector(collector string, isDefaultEnabled bool, factory func(logger log.Logger) (Collector, error)) {
+
 	var helpDefaultState string
 	if isDefaultEnabled {
 		helpDefaultState = "enable"

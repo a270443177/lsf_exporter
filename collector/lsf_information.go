@@ -2,7 +2,6 @@ package collector
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 
@@ -50,34 +49,23 @@ func (c *InformationCollector) Update(ch chan<- prometheus.Metric) error {
 }
 
 func lsfOutput(logger log.Logger, exe_file string, args ...string) ([]byte, error) {
-	_, err := os.Stat(*LSF_BINDIR)
-	if os.IsNotExist(err) {
-		level.Error(logger).Log("err", *LSF_BINDIR, "missing")
-		os.Exit(1)
-	}
+	// _, err := os.Stat(*LSF_BINDIR)
+	// if os.IsNotExist(err) {
+	// 	level.Error(logger).Log("err", *LSF_BINDIR, "missing")
+	// 	os.Exit(1)
+	// }
 
-	_, err = os.Stat(*LSF_SERVERDIR)
-	if os.IsNotExist(err) {
-		level.Error(logger).Log("err", *LSF_SERVERDIR, "missing")
-		os.Exit(1)
-	}
+	// _, err = os.Stat(*LSF_SERVERDIR)
+	// if os.IsNotExist(err) {
+	// 	level.Error(logger).Log("err", *LSF_SERVERDIR, "missing")
+	// 	os.Exit(1)
+	// }
 
-	_, err = os.Stat(*LSF_ENVDIR)
-	if os.IsNotExist(err) {
-		level.Error(logger).Log("err", *LSF_ENVDIR, "missing")
-		os.Exit(1)
-	}
-
-	//设置环境变量
-	PATH := os.Getenv("PATH")
-
-	NEW_PATH := PATH + ":" + *LSF_BINDIR
-
-	os.Setenv("PATH", NEW_PATH)
-	os.Setenv("LSF_BINDIR", *LSF_BINDIR)
-	os.Setenv("LSF_ENVDIR", *LSF_ENVDIR)
-	os.Setenv("LSF_LIBDIR", *LSF_LIBDIR)
-	os.Setenv("LSF_SERVERDIR", *LSF_SERVERDIR)
+	// _, err = os.Stat(*LSF_ENVDIR)
+	// if os.IsNotExist(err) {
+	// 	level.Error(logger).Log("err", *LSF_ENVDIR, "missing")
+	// 	os.Exit(1)
+	// }
 
 	cmd := exec.Command(exe_file, args...)
 
