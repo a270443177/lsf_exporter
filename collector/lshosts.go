@@ -109,10 +109,12 @@ func FormatlshostsUnit(size float64, unit string) float64 {
 		return size * 1024
 	case "G":
 		return size * 1024 * 1024
-	case "P":
+	case "T":
 		return size * 1024 * 1024 * 1024
-	case "E":
+	case "P":
 		return size * 1024 * 1024 * 1024 * 1024
+	case "E":
+		return size * 1024 * 1024 * 1024 * 1024 * 1024
 	default:
 		return -1
 	}
